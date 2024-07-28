@@ -1,35 +1,51 @@
-const express = require('express');
-const session = require('express-session');
-const RedisStore = require('connect-redis')(session);
-const redis = require('redis');
+//imports
+require('dotenv').config();
+
+const express= require('express');
+const mongoose = require('mongoose');
+const session= require('express-session');
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5001;
 
-// Redis client
-const redisClient = redis.createClient({
-  host: 'localhost',
-  port: 6379, // Default Redis port
-});
 
-// Session middleware with Redis store
+//database connection
+mongoose.connect(process.env.DB_URI);
+const db=mongoose.connection;
+db.on("error",(error) => console.log(error));
+db.once("open",()=> console.log("connected to the database!"));
+
+
+// middlewares
+app.use(express.urlencoded({extended: false}));
+app.use(express.json());
+
 app.use(session({
-  store: new RedisStore({ client: redisClient }),
-  secret: 'my secret key',
-  resave: false,
+  secret:'my secret key',
   saveUninitialized: true,
+  resave: false,
 }));
 
-// Example route
-app.get('/', (req, res) => {
-  if (req.session.views) {
-    req.session.views++;
-  } else {
-    req.session.views = 1;
-  }
-  res.send(`Views: ${req.session.views}`);
+app.use((req,res,next) => {
+   res.locals.message = req.session.message;
+   delete req.session.message;
+   next();
+});
+app.use(express.static("uploads"));
+//set template engine
+app.set('view engine','ejs');
+
+app.get("/",(req,res) => {
+  res.render('index',{async:true});
 });
 
-app.listen(PORT, () => {
+//staic files
+app.use('/uploads',express.static('uploads'));
+
+
+// route  prefix
+app.use("",require("./routes/routes"));
+
+app.listen(PORT,()=>{
   console.log(`Server started at http://localhost:${PORT}`);
 });
